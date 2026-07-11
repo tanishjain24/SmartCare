@@ -17,11 +17,37 @@ const app = express();
 app.use(express.json());
 
 // --- CORS setup ---
-const allowedOrigins = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
+// Allow frontend URL from environment variable + local development URLs
+const normalizeOrigin = (value) => {
+    const s = String(value || "").trim();
+    // Browser Origin header never includes a trailing slash
+    return s.replace(/\/+$/g, "");
+};
+
+const envFrontendOrigins = String(process.env.FRONTEND_URL || "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean);
+
+const allowedOrigins = new Set([
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    ...envFrontendOrigins,
+]);
+
 app.use(
     cors({
         origin: (origin, cb) => {
-            if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+            // Allow requests with no origin (mobile apps, Postman, etc.)
+            if (!origin) return cb(null, true);
+            
+            if (allowedOrigins.has(origin)) return cb(null, true);
+            
+            // In development, allow any localhost
+            if (process.env.NODE_ENV !== 'production' && origin.includes('localhost')) {
+                return cb(null, true);
+            }
+            
             return cb(new Error(`CORS blocked for origin: ${origin}`));
         },
         credentials: true,

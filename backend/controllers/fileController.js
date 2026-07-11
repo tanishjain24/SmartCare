@@ -3,7 +3,12 @@ import fs from "fs";
 import mongoose from "mongoose";
 import multer from "multer";
 import FileModel from "../models/File.js";
-import { uploadEncryptedFileToMega, downloadDecryptedFileFromMega } from "../mega.js";
+import {
+  uploadEncryptedFileToCloudinary,
+  downloadDecryptedFileFromCloudinary,
+  deleteCloudinaryAssetIfPresent,
+} from "../cloudinaryStorage.js";
+import { downloadDecryptedFileFromMega } from "../mega.js";
 
 // Multer setup (temporary upload storage)
 export const upload = multer({ dest: "uploads/" });
@@ -11,12 +16,15 @@ export const upload = multer({ dest: "uploads/" });
 // 📤 Upload with encryption
 export const uploadFile = async (req, res) => {
   const patientId = req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(patientId)) {
+    return res.status(400).json({ success: false, message: "Invalid patient ID" });
+  }
   if (!req.file) {
     return res.status(400).json({ success: false, message: "No file uploaded" });
   }
 
   try {
-    const result = await uploadEncryptedFileToMega(
+    const result = await uploadEncryptedFileToCloudinary(
       req.file.path,
       req.file.originalname,
       patientId
@@ -30,7 +38,7 @@ export const uploadFile = async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("Upload error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(err.statusCode || 500).json({ success: false, message: err.message });
   }
 };
 
@@ -71,14 +79,41 @@ export const listFilesForDoctor = async (req, res) => {
   }
 };
 
-// �📥 Download with decryption
+// 📥 Download with decryption (supports both Cloudinary and legacy MEGA files)
 export const downloadDecryptedFile = async (req, res) => {
   try {
     const { id: patientId, fileId } = req.params;
-    const result = await downloadDecryptedFileFromMega(fileId, patientId);
+    if (!mongoose.Types.ObjectId.isValid(fileId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid file ID" });
+    }
+
+    const fileDoc = await FileModel.findById(fileId);
+    if (!fileDoc || fileDoc.patientId.toString() !== patientId) {
+      return res
+        .status(404)
+        .json({ success: false, message: "File not found" });
+    }
+
+    let result;
+    if (fileDoc.storageUrl) {
+      // New Cloudinary-based storage
+      result = await downloadDecryptedFileFromCloudinary(fileId, patientId);
+    } else if (fileDoc.megaLink) {
+      // Legacy MEGA-based storage
+      result = await downloadDecryptedFileFromMega(fileId, patientId);
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "File has no storage location configured.",
+      });
+    }
 
     if (!result.success) {
-      return res.status(400).json(result);
+      return res
+        .status(400)
+        .json({ success: false, message: result.message || "Download failed" });
     }
 
     const { filePath, fileName } = result;
@@ -89,7 +124,9 @@ export const downloadDecryptedFile = async (req, res) => {
     });
   } catch (err) {
     console.error("Download error:", err);
-    res.status(500).json({ success: false, message: "Download failed" });
+    res
+      .status(500)
+      .json({ success: false, message: "Download failed", error: err.message });
   }
 };
 
@@ -106,6 +143,11 @@ export const deleteFile = async (req, res) => {
     if (!fileDoc || fileDoc.patientId.toString() !== patientId) {
       return res.status(404).json({ success: false, message: "File not found" });
     }
+
+    // Best-effort delete from Cloudinary
+    try {
+      await deleteCloudinaryAssetIfPresent(fileDoc);
+    } catch {}
 
     if (fileDoc.path && fs.existsSync(fileDoc.path)) {
       fs.unlinkSync(fileDoc.path);

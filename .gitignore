@@ -1,37 +1,77 @@
-# Global ignore for sensitive files and build artifacts
-
-# Environment files
-.env
-.env.*
-**/.env
-**/.env.*
-
-# Python caches
+# Dependencies
+node_modules/
 __pycache__/
-**/__pycache__/
 *.pyc
-
-# Node logs and caches
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local uploads/temp
-NLP_Model/nlp_model/web-app/uploads/
-NLP_Model/nlp_model/web-app/text/
-NLP_Model/nlp_model/web-app/uploads/
-NLP_Model/nlp_model/web-app/text/
-backend/uploads/
-
-# Virtual environments
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
 .venv/
 venv/
 ENV/
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
 # OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
 # Build outputs
-build/
 dist/
+build/
+*.tsbuildinfo
+.cache/
+
+# Uploads and temporary files
+uploads/
+*.tmp
+*.temp
+
+# Database  
+*.sqlite
+*.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+.vercel
+.render
+*.pem
+*.key
+
+# Keep example files
+!.env.example
+!*.example
